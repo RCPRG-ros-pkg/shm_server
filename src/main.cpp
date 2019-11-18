@@ -24,24 +24,21 @@ void print_usage()
     printf("  - <readers> - number of readers allowed to read from channel\n");
 }
 
-shm::ChannelName parse_name(const char* name_str)
+const char* parse_name(const char* name_str)
 {
     const auto name_len = strlen(name_str);
-
     if(name_len == 0)
     {
         throw std::runtime_error("Name of the channel cannot be empty");
     }
-    else if(const auto max_name_len = std::tuple_size<shm::ChannelName>::value; name_len >= max_name_len)
+    else if(const auto max_name_len = 128; name_len >= max_name_len)
     {
         throw std::runtime_error("Name of the channel must have max "
             + std::to_string(max_name_len) + " characters, got "
             + std::to_string(name_len));
     }
 
-    auto name = shm::ChannelName();
-    memcpy(name.data(), name_str, name_len * sizeof(char));
-    return name;
+    return name_str;
 }
 
 int parse_size(const char* size_str)
@@ -104,7 +101,7 @@ int main(int argc, char** argv)
         ros::init(argc, argv, "shm_server");
 
         // Create channel
-        printf("[shm_server] Creating channel '%s' with size %d and %d readers...\n", name.data(), size, readers);
+        printf("[shm_server] Creating channel '%s' with size %d and %d readers...\n", name, size, readers);
         const auto channel = shm::Channel(name, size, readers);
 
         // Wait for exit
