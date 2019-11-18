@@ -5,7 +5,7 @@ Server for managing connections via shared memory using [`shm_comm`](https://git
 
 When writing applications which use [`shm_comm`](https://github.com/RCPRG-ros-pkg/shm_comm) library as mechanism for interprocess communication, you have to deal with shared memory channels' initialization. In the simplest case, you can try to create that channels in every node, but it increases responsibilities of every application. Also, it increases the risk, that when the last "owner" of the channel crash, channel will be not removed and its resources are not freed (because they are interprocess, shared). 
 
-Better approach is to initialize that channels aside, in the other process. Such program have only to create needed channels and remove them at exit, taking care of releasing resources. This process have to be as simple as possible, so the risk of crash is much lower. Finally, our workers-apps have not to worry about channels initialization, and just use them. It simplifies design.
+Better approach is to initialize that channels aside, in the other process. Such program have only to create needed channels and remove them at exit, taking care of releasing resources. This process have to be as simple as possible, so the risk of crash is much lower. Finally, our workers-apps have not to worry about channels initialization, how much readers will be, how big buffers must be. They should just use them. It simplifies design.
 
 This project applies second aproach. It gives `shm_server` ROS application, which manages shared memory based communications.
 
