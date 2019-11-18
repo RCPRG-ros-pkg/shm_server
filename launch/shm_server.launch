@@ -12,11 +12,9 @@
   <arg unless="$(arg debug)" name="LAUNCH_PREFIX" value=""/>
   <arg     if="$(arg debug)" name="LAUNCH_PREFIX" value="gdb -ex run --args "/>
 
-  <arg name="name" doc="Name of created shared memory channel" />
-  <arg name="size" doc="Size of created shared memory channel" />
-  <arg name="readers" doc="Number of readers of shared memory channel" />
+  <arg name="config_path" doc="Path to the JSON file with server configuration" />
 
   <node name="shm_server" pkg="shm_server" type="shm_server"
-    args="$(arg name) $(arg size) $(arg readers)"
+    args="$(arg config_path)"
     output="screen" />
 </launch>

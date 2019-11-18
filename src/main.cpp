@@ -5,110 +5,144 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <cassert>
-#include <cstring>
 #include <cstdio>
 
+#include <fstream>
 #include <stdexcept>
 #include <string>
+
+#include <nlohmann/json.hpp>
 
 #include <ros/ros.h>
 
 #include "shm_comm/Channel.hpp"
 
-void print_usage()
+/**
+ * @brief Helper structure, defines shared memory channel configuration
+ */
+struct ChannelConfig
 {
-    printf("Usage: ./shm_server <name> <size> <readers>\n");
-    printf(" where\n");
-    printf("  - <name> - unique name for created channel\n");
-    printf("  - <size> - size in bytes of shared memory buffer for that channel\n");
-    printf("  - <readers> - number of readers allowed to read from channel\n");
-}
-
-const char* parse_name(const char* name_str)
-{
-    const auto name_len = strlen(name_str);
-    if(name_len == 0)
-    {
-        throw std::runtime_error("Name of the channel cannot be empty");
-    }
-    else if(const auto max_name_len = 128; name_len >= max_name_len)
-    {
-        throw std::runtime_error("Name of the channel must have max "
-            + std::to_string(max_name_len) + " characters, got "
-            + std::to_string(name_len));
-    }
-
-    return name_str;
-}
-
-int parse_size(const char* size_str)
-{
+    std::string name;
     int size;
-    if(const auto result = sscanf(size_str, "%d", &size); result != 1)
+    int readers;
+};
+
+//! Helper typedef, arranges many shm channel configs
+using ChannelsConfigs = std::vector<ChannelConfig>;
+
+static void print_usage()
+{
+    printf("Usage: ./shm_server <config_path>\n");
+    printf(" where\n");
+    printf("  - <config_path> - path to JSON file with configuration of server\n");
+}
+
+static std::string parse_name(const nlohmann::json& json)
+{
+    const auto name = json.at("name").get<std::string>();
+    if(name.size() == 0 || name.size() >= 128)
     {
-        throw std::runtime_error("Invalid channel size: '"
-            + std::string(size_str) + "'");
+        throw std::runtime_error("Invalid channel name size. Must be less than 128 characters");
     }
 
+    return name;
+}
+
+static int parse_size(const nlohmann::json& json)
+{
+    const auto size = json.at("size").get<int>();
     if(size <= 0)
     {
-        throw std::runtime_error("Size of the channel must be grater than zero, got '"
-            + std::string(size_str) + "'");
+        throw std::runtime_error("Invalid channel size. Must be greater than zero");
     }
 
     return size;
 }
 
-int parse_readers(const char* readers_str)
+static int parse_readers(const nlohmann::json& json)
 {
-    int readers;
-    if(const auto result = sscanf(readers_str, "%d", &readers); result != 1)
-    {
-        throw std::runtime_error("Invalid number of readers: '"
-            + std::string(readers_str) + "'");
-    }
-
+    const auto readers = json.at("readers").get<int>();
     if(readers <= 0)
     {
-        throw std::runtime_error("Number of readers in the channel must be grater than zero, got '"
-            + std::string(readers_str) + "'");
+        throw std::runtime_error("Invalid number of channel readers. Must be greater than zero");
     }
 
     return readers;
 }
 
+static void from_json(const nlohmann::json& json, ChannelConfig& channel_config)
+{
+    channel_config.name = parse_name(json);
+    channel_config.size = parse_size(json);
+    channel_config.readers = parse_readers(json);
+}
+
+static nlohmann::json read_config(const char* path)
+{
+    assert(path != nullptr);
+
+    // Open configuration file
+    std::ifstream ifs(path);
+    if(!ifs)
+    {
+        throw std::runtime_error("Could not open configuration file: "
+            + std::string(path));
+    }
+
+    // Parse configuration from JSON
+    auto json = nlohmann::json();
+    if(!(ifs >> json))
+    {
+        throw std::runtime_error("Could not read configuration file: "
+            + std::string(path));
+    }
+
+    return json;
+}
+
+static ChannelsConfigs read_channels_configs(const char* path)
+{
+    const auto json = read_config(path);
+    const auto channels_json = json.at("channels");
+    return channels_json.get<ChannelsConfigs>();
+}
+
+/**
+ * @brief Entry point to the application
+ * @details Reads configuration of the server and initializes shared memory channels
+ * It gets path to server configuration JSON from command line,
+ *  initializes ROS client library, reads configuration JSON, parses
+ *  channels' condfigurations and initializes them.
+ * After successfull initialization it waits for interruption via signal,
+ *  after which it removes created channels.
+ */
 int main(int argc, char** argv)
 {
-    if(argc < 4)
+    if(argc < 2)
     {
         print_usage();
         return EXIT_FAILURE;
     }
 
-    // Get arguments from command line
-    const auto name_str = argv[1];
-    const auto size_str = argv[2];
-    const auto readers_str = argv[3];
-
     try
     {
-        // Parse arguments
-        const auto name = parse_name(name_str);
-        const auto size = parse_size(size_str);
-        const auto readers = parse_readers(readers_str);
-
-        // Initialize ROScpp in order to be gracefully killed via signals
+        printf("[shm_server] Initializing ROS client...\n");
         ros::init(argc, argv, "shm_server");
 
-        // Create channel
-        printf("[shm_server] Creating channel '%s' with size %d and %d readers...\n", name, size, readers);
-        const auto channel = shm::Channel(name, size, readers);
+        printf("[shm_server] Reading channels configuration...\n");
+        const auto config_path = argv[1];
+        const auto channels_configs = read_channels_configs(config_path);
 
-        // Wait for exit
+        printf("[shm_server] Initializing shared memory channels...\n");
+        std::vector<shm::Channel> channels;
+        channels.reserve(channels_configs.size());
+        for(const auto& [name, size, readers] : channels_configs)
+        {
+            channels.emplace_back(name.c_str(), size, readers);
+        }
+
         printf("[shm_server] Server initialized! Waiting for signal to exit...\n");
         ros::spin();
-
-        printf("[shm_server] Signal occured. Closing server...\n");
     }
     catch(std::exception& ex)
     {
@@ -116,5 +150,6 @@ int main(int argc, char** argv)
         return EXIT_FAILURE;
     }
 
+    printf("[shm_server] Server deinitialized\n");
     return EXIT_SUCCESS; // Channel instance will be deleted with destructor automatically
 }

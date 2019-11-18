@@ -18,17 +18,20 @@ option(SHM_SERVER_BUILD_TESTS "Whether to build tests or not" ON)
 ###############################################################################
 
 find_package(catkin REQUIRED
+    cmake_modules
     COMPONENTS
         shm_comm
         roscpp
 )
+
+add_subdirectory(extern)
 
 ###############################################################################
 # Package configuration
 ###############################################################################
 
 catkin_package(
-    CATKIN_DEPENDS
+    DEPENDS
         shm_comm
         roscpp
 )
@@ -41,16 +44,18 @@ add_executable(shm_server
     src/main.cpp
 )
 
+target_link_libraries(shm_server
+    PRIVATE
+        ${catkin_LIBRARIES}
+        json
+)
+
 target_include_directories(shm_server
     PRIVATE
         include
         ${catkin_INCLUDE_DIRS}
 )
 
-target_link_libraries(shm_server
-    PRIVATE
-        ${catkin_LIBRARIES}
-)
 
 set_target_properties(shm_server
     PROPERTIES
