@@ -10,7 +10,8 @@
   <license>BSD</license>
 
   <buildtool_depend>catkin</buildtool_depend>
-
   <build_depend>shm_comm</build_depend>
+  <build_depend>roscpp</build_depend>
   <run_depend>shm_comm</run_depend>
+  <run_depend>roscpp</run_depend>
 </package>
